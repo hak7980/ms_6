@@ -1,0 +1,163 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r set-up,include=F}
+
+# Loading libraries
+
+library(tidyverse)
+
+library(ggplot2)
+
+library(janitor)
+
+library(stringr)
+
+library(lubridate)
+
+library(stringi)
+
+```
+
+
+```{r data wrangling, echo=F}
+
+# Loading dataset
+
+load("raw-data/odimetadata.Rdata")
+
+# Filtering for only Pakistan's matches and 
+# adding in a year column
+
+subsetpk <- 
+  
+  results %>%
+  
+  mutate(year = year(as.Date(
+    
+  date, format = "%m/%d/%Y"))) %>%
+  
+  
+# First adding a column that contains the over 
+# number and then adding an indicator variable 
+# if the overs are the first five of an 
+# innings 
+
+  mutate(over = stri_extract(ball, regex = "[.](.*)")) %>%
+
+  mutate(over = substring(over, 2)) %>%
+
+  mutate(over = gsub("\\..*","", over)) %>%
+
+  mutate(firstfive = ifelse(over == 0|
+
+                            over == 1|
+
+                            over == 2|
+
+                            over == 3|
+
+                            over == 4|
+
+                            over == 5, 1,0)) %>%
+
+# Filtering for the first five overs and then
+# summing the total number of runs scores in
+# those overs and ungrouping
+
+  filter(firstfive == 1) %>%
+
+  group_by(column_label) %>%
+
+  mutate(firstfiveruns = sum(totalRuns)) %>%
+
+  ungroup() %>%
+  
+  
+# Adding an indicator variable for how many
+# runs were scored in the first five overs 
+# with the varibale label indicating the 
+# upperbound of the runs scored and the 
+# lowerbound = (upperbound-10)
+
+  mutate(bracket =
+
+           ifelse(firstfiveruns<=15,"15",
+
+                  ifelse(firstfiveruns<=30 &
+
+                      firstfiveruns>=15, "30",
+
+                      ifelse(firstfiveruns>=30 &
+
+                      firstfiveruns>=30,"30+",0)))) %>%
+  
+# Adding an indicator variable for how many matches
+# Pakistan won and then calculating the proportion 
+# of mathces won if they scored runs in each brack
+# for years onwards 2006
+
+  mutate(pakwin = ifelse(winner=="Pakistan",1,0)) %>%
+  
+  group_by(bracket, year) %>%
+  
+  mutate(prop_won = sum(pakwin)/n()) %>%
+  
+  ungroup() 
+
+
+
+```
+
+
+```{r making plot, echo=F}
+
+# Making plot of the proportion of matches won by 
+# Pakistan within each run bracket sorted according
+# to the year the match was played 
+
+plot <- 
+  
+  subsetpk %>%
+  
+  filter(year>=2010) %>%
+  
+  ggplot() + 
+      
+  geom_point(aes(x = factor(year), 
+                     
+                 group = factor(bracket), 
+                     
+                 color = factor(bracket), y = prop_won), 
+                 
+                 size=2) +
+  
+    labs(title = 
+         
+         "Proportion of Matches won by Pakistan Sorted by Runs Scored in the \n First Five Overs", 
+       
+    subtitle = "Sorted According to Run Bracket - Period: 2010-2017",
+  
+    x = "Year", 
+       
+    y = "Proportion Won",
+       
+    col = "Runs Scored Bracket") +
+    
+    labs(caption = "Source: cricsheet.org") +
+  
+     theme_classic()+ 
+  
+    theme(legend.position = "right",
+          
+          axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r saving plot, include=FALSE}
+
+ggsave("ms_6/dist_plot.png")
+
+```
